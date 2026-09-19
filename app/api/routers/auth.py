@@ -1,203 +1,166 @@
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
-import hashlib
 import secrets
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import text
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_session
+from app.core.auth import (
+    CurrentUser,
+    create_access_token,
+    get_current_user,
+    get_roles,
+    hash_password,
+    _hash_refresh_token,
+    verify_password,
+)
+from app.core.config import settings
+from app.db.session import get_db
+from app.models.models import metadata
+from app.schemas.auth import (
+    AuthResponse,
+    AuthUserResponse,
+    LoginRequest,
+    LogoutRequest,
+    MessageResponse,
+    RefreshRequest,
+    RegisterRequest,
+    TokenResponse,
+)
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
-
-# Development-friendly local auth. Passwords are hashed with PBKDF2-HMAC-SHA256.
-# JWT-like opaque bearer tokens are stored server-side in memory only; for production,
-# replace with a persistent token store or signed JWT implementation.
-_sessions: dict[str, dict] = {}
-
-
-class RegisterRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=100)
-    email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
-    first_name: str | None = Field(default=None, max_length=100)
-    last_name: str | None = Field(default=None, max_length=100)
-
-
-class LoginRequest(BaseModel):
-    username: str | None = Field(default=None, min_length=1, max_length=100)
-    email: EmailStr | None = None
-    password: str = Field(min_length=1, max_length=128)
-
-
-class RefreshRequest(BaseModel):
-    refresh_token: str = Field(min_length=20)
+router = APIRouter(tags=["auth"])
 
 
-class LogoutRequest(BaseModel):
-    refresh_token: str | None = None
-
-
-class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    expires_in: int
-
-
-class AuthUserResponse(BaseModel):
-    id: str
-    username: str
-    email: str
-    first_name: str | None = None
-    last_name: str | None = None
-    roles: list[str] = []
-
-
-def _hash_password(password: str, salt: bytes | None = None) -> str:
-    salt = salt or secrets.token_bytes(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 210_000)
-    return f"pbkdf2_sha256$210000${salt.hex()}${digest.hex()}"
-
-
-def _verify_password(password: str, encoded: str) -> bool:
-    try:
-        _, rounds, salt_hex, digest_hex = encoded.split("$")
-        digest = hashlib.pbkdf2_hmac(
-            "sha256", password.encode(), bytes.fromhex(salt_hex), int(rounds)
-        )
-        return secrets.compare_digest(digest.hex(), digest_hex)
-    except Exception:
-        return False
-
-
-async def _user_payload(session: AsyncSession, user_id: str) -> AuthUserResponse:
-    result = await session.execute(
-        text("""
-            SELECT u.id, u.username, u.email, u.first_name, u.last_name,
-                   COALESCE(array_agg(r.name) FILTER (WHERE r.name IS NOT NULL), '{}') AS roles
-            FROM users u
-            LEFT JOIN user_roles ur ON ur.user_id = u.id
-            LEFT JOIN roles r ON r.id = ur.role_id
-            WHERE u.id = CAST(:id AS uuid)
-            GROUP BY u.id
-        """),
-        {"id": user_id},
-    )
-    row = result.mappings().first()
-    if not row:
-        raise HTTPException(404, "User not found")
+def _user_response(user: dict, roles: set[str], username: str) -> AuthUserResponse:
     return AuthUserResponse(
-        id=str(row["id"]),
-        username=row["username"],
-        email=row["email"],
-        first_name=row["first_name"],
-        last_name=row["last_name"],
-        roles=list(row["roles"] or []),
+        id=int(user["id"]),
+        username=username,
+        email=str(user["email"]),
+        full_name=str(user["full_name"]),
+        roles=sorted(roles),
     )
 
 
-def _tokens(user_id: str) -> TokenResponse:
-    access = secrets.token_urlsafe(48)
-    refresh = secrets.token_urlsafe(64)
+async def _issue_tokens(db: AsyncSession, user: dict, roles: set[str], username: str) -> AuthResponse:
+    access_token, expires_in = create_access_token(int(user["id"]), username, roles)
+    refresh_token = secrets.token_urlsafe(64)
+    sessions = metadata.tables["auth_sessions"]
     now = datetime.now(timezone.utc)
-    _sessions[access] = {"user_id": user_id, "expires": now + timedelta(minutes=30), "refresh": refresh}
-    _sessions[refresh] = {"user_id": user_id, "expires": now + timedelta(days=30), "access": access}
-    return TokenResponse(access_token=access, refresh_token=refresh, expires_in=1800)
-
-
-@router.post("/register", response_model=TokenResponse, status_code=201)
-async def register(body: RegisterRequest, session: AsyncSession = Depends(get_session)):
-    exists = await session.execute(
-        text("SELECT id FROM users WHERE username = :username OR email = :email LIMIT 1"),
-        {"username": body.username, "email": body.email},
+    await db.execute(insert(sessions).values(
+        id=uuid.uuid4(),
+        user_id=int(user["id"]),
+        refresh_token_hash=_hash_refresh_token(refresh_token),
+        created_at=now,
+        expires_at=now + timedelta(days=settings.refresh_token_days),
+    ))
+    await db.execute(update(metadata.tables["users"]).where(metadata.tables["users"].c.id == user["id"]).values(last_login_at=now))
+    await db.commit()
+    return AuthResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="Bearer",
+        expires_in=expires_in,
+        refresh_expires_in=settings.refresh_token_days * 86400,
+        user=_user_response(user, roles, username),
     )
-    if exists.first():
-        raise HTTPException(409, "A user with this username or email already exists", headers={"X-Error-Code": "USER_ALREADY_EXISTS"})
 
-    user_id = str(uuid.uuid4())
-    await session.execute(
-        text("""
-            INSERT INTO users (id, username, email, password_hash, first_name, last_name, is_active)
-            VALUES (CAST(:id AS uuid), :username, :email, :password_hash, :first_name, :last_name, true)
-        """),
-        {
-            "id": user_id, "username": body.username, "email": body.email,
-            "password_hash": _hash_password(body.password),
-            "first_name": body.first_name, "last_name": body.last_name,
-        },
+
+@router.post("/auth/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED,
+             summary="Register a local user and sign in")
+async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    users = metadata.tables["users"]
+    credentials = metadata.tables["auth_credentials"]
+    roles = metadata.tables["roles"]
+    user_roles = metadata.tables["user_roles"]
+
+    existing = await db.execute(
+        select(credentials.c.user_id).where(credentials.c.username == payload.username)
     )
-    role = await session.execute(text("SELECT id FROM roles WHERE name = 'user' LIMIT 1"))
-    role_row = role.first()
-    if role_row:
-        await session.execute(
-            text("INSERT INTO user_roles (user_id, role_id) VALUES (CAST(:uid AS uuid), :rid) ON CONFLICT DO NOTHING"),
-            {"uid": user_id, "rid": role_row[0]},
-        )
-    await session.commit()
-    return _tokens(user_id)
+    if existing.first():
+        raise HTTPException(409, "Username is already registered", headers={"X-Error-Code": "USERNAME_EXISTS"})
+    existing_email = await db.execute(select(users.c.id).where(users.c.email == str(payload.email)))
+    if existing_email.first():
+        raise HTTPException(409, "Email is already registered", headers={"X-Error-Code": "EMAIL_EXISTS"})
+
+    result = await db.execute(insert(users).values(
+        email=str(payload.email),
+        full_name=f"{payload.first_name} {payload.last_name}".strip(),
+        status="active",
+    ).returning(users))
+    user = dict(result.mappings().one())
+    await db.execute(insert(credentials).values(
+        user_id=user["id"], username=payload.username, password_hash=hash_password(payload.password)
+    ))
+    role_id = await db.execute(select(roles.c.id).where(roles.c.code == settings.default_role))
+    rid = role_id.scalar_one_or_none()
+    if rid is None:
+        await db.rollback()
+        raise HTTPException(500, f"Default role '{settings.default_role}' is missing")
+    await db.execute(insert(user_roles).values(user_id=user["id"], role_id=rid))
+    await db.commit()
+    return await _issue_tokens(db, user, {settings.default_role}, payload.username)
 
 
-@router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest, session: AsyncSession = Depends(get_session)):
-    if not body.username and not body.email:
-        raise HTTPException(422, "Either username or email is required", headers={"X-Error-Code": "VALIDATION_ERROR"})
-    result = await session.execute(
-        text("""
-            SELECT id, password_hash, is_active
-            FROM users
-            WHERE (:username IS NOT NULL AND username = :username)
-               OR (:email IS NOT NULL AND email = :email)
-            LIMIT 1
-        """),
-        {"username": body.username, "email": body.email},
-    )
-    row = result.mappings().first()
-    if not row or not row["is_active"] or not _verify_password(body.password, row["password_hash"]):
+@router.post("/auth/login", response_model=AuthResponse, summary="Login with username or email")
+async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
+    users = metadata.tables["users"]
+    credentials = metadata.tables["auth_credentials"]
+    query = select(credentials, users).join(users, users.c.id == credentials.c.user_id)
+    if payload.username:
+        query = query.where(credentials.c.username == payload.username)
+    else:
+        query = query.where(users.c.email == str(payload.email))
+    row = (await db.execute(query)).mappings().first()
+    if not row or not verify_password(payload.password, row["password_hash"]):
         raise HTTPException(401, "Invalid username/email or password", headers={"X-Error-Code": "AUTHENTICATION_FAILED"})
-    return _tokens(str(row["id"]))
+    user = {k: v for k, v in row.items() if k in users.c}
+    if str(user.get("status")) == "blocked":
+        raise HTTPException(403, "User is blocked")
+    roles = await get_roles(db, int(user["id"]))
+    username = str(row["username"])
+    return await _issue_tokens(db, user, roles, username)
 
 
-@router.post("/refresh", response_model=TokenResponse)
-async def refresh(body: RefreshRequest):
-    data = _sessions.get(body.refresh_token)
-    if not data or data.get("expires", datetime.min.replace(tzinfo=timezone.utc)) <= datetime.now(timezone.utc):
+@router.post("/auth/refresh", response_model=AuthResponse, summary="Rotate a refresh token")
+async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
+    sessions = metadata.tables["auth_sessions"]
+    credentials = metadata.tables["auth_credentials"]
+    users = metadata.tables["users"]
+    row = (await db.execute(
+        select(sessions, users, credentials)
+        .join(users, users.c.id == sessions.c.user_id)
+        .join(credentials, credentials.c.user_id == users.c.id)
+        .where(sessions.c.refresh_token_hash == _hash_refresh_token(payload.refresh_token))
+    )).mappings().first()
+    if not row or row["revoked_at"] is not None or row["expires_at"] <= datetime.now(timezone.utc):
         raise HTTPException(401, "Invalid or expired refresh token")
-    old_access = data.get("access")
-    if old_access:
-        _sessions.pop(old_access, None)
-    _sessions.pop(body.refresh_token, None)
-    return _tokens(data["user_id"])
+    await db.execute(delete(sessions).where(sessions.c.id == row["id"]))
+    user = {k: v for k, v in row.items() if k in users.c}
+    roles = await get_roles(db, int(user["id"]))
+    return await _issue_tokens(db, user, roles, str(row["username"]))
 
 
-@router.post("/logout", status_code=204)
-async def logout(body: LogoutRequest):
-    if body.refresh_token:
-        data = _sessions.pop(body.refresh_token, None)
-        if data and data.get("access"):
-            _sessions.pop(data["access"], None)
-    return None
+@router.post("/auth/logout", response_model=MessageResponse, summary="Revoke a refresh token")
+async def logout(payload: LogoutRequest, db: AsyncSession = Depends(get_db)):
+    sessions = metadata.tables["auth_sessions"]
+    await db.execute(delete(sessions).where(sessions.c.refresh_token_hash == _hash_refresh_token(payload.refresh_token)))
+    await db.commit()
+    return MessageResponse(message="Logged out")
 
 
-from fastapi import Header
-
-async def _current_user_from_header(
-    authorization: str | None = Header(default=None),
-) -> str:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(401, "Authentication required")
-    token = authorization[7:].strip()
-    data = _sessions.get(token)
-    if not data or data.get("expires", datetime.min.replace(tzinfo=timezone.utc)) <= datetime.now(timezone.utc):
-        raise HTTPException(401, "Invalid or expired access token")
-    return data["user_id"]
+@router.get("/auth/me", response_model=AuthUserResponse, summary="Current authenticated user")
+async def me(user: CurrentUser = Depends(get_current_user)):
+    return _user_response(user.db_user, user.roles, user.username)
 
 
-@router.get("/me", response_model=AuthUserResponse)
-async def me(
-    current_user: str = Depends(_current_user_from_header),
-    session: AsyncSession = Depends(get_session),
-):
-    return await _user_payload(session, current_user)
+@router.get("/me", response_model=AuthUserResponse, include_in_schema=False)
+async def me_alias(user: CurrentUser = Depends(get_current_user)):
+    return _user_response(user.db_user, user.roles, user.username)
+
+
+@router.get("/me/roles", include_in_schema=False)
+async def roles_alias(user: CurrentUser = Depends(get_current_user)):
+    return sorted(user.roles)

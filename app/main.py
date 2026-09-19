@@ -17,12 +17,16 @@ from app.api.routers import (
 )
 from app.core.config import settings
 from app.db.session import engine, ping_db
+from app.db.auth_tables import ensure_auth_tables
 from app.models.models import reflect_schema
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await ping_db()
+    await reflect_schema(engine)
+    await ensure_auth_tables(engine)
+    # Reflect the two authentication support tables so the auth layer can use them.
     await reflect_schema(engine)
     crud.register_all_tables()
     yield
@@ -32,7 +36,8 @@ app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description=(
-        "the API validates JWTs, provisions CRM users, exposes named CRUD "
+        "RTK IT School CRM API. Authentication is handled locally by the API using signed JWT access tokens and database-backed refresh sessions. "
+        "The API exposes named CRUD "
         "resources, multipart uploads, imports and reports."
     ),
     lifespan=lifespan,

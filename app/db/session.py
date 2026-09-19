@@ -11,3 +11,7 @@ async def get_db():
 async def ping_db():
     async with engine.begin() as conn:
         await conn.exec_driver_sql("SELECT 1")
+
+
+# Backwards-compatible alias used by auth and other routers.
+get_session = get_db

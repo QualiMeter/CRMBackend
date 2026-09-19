@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select, insert, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.auth import CurrentUser, require_roles
+from app.core.auth import require_roles
 from app.db.session import get_db
 from app.models.models import metadata
 from app.schemas.requests import UserCreateRequest, UserUpdateRequest, RoleAssignmentRequest
