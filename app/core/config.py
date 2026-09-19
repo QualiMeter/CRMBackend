@@ -1,11 +1,18 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
-    app_name: str = "RTK IT School CRM API"
-    app_version: str = "2.0.0"
-    api_prefix: str = "/api/v1"
-    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/crm"
-    cors_origins: str = "*"
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    app_name: str
+    app_version: str
+    api_prefix: str
+    database_url: str
+    cors_origins: str
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
 
 settings = Settings()

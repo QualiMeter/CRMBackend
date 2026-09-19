@@ -4,7 +4,19 @@ FastAPI backend для уже существующей PostgreSQL базы `crm`
 
 ## Локальный запуск
 
-Создай `.env` из `.env.example` и укажи данные PostgreSQL:
+Создай `.env` из `.env.example` и укажи данные PostgreSQL. В Windows PowerShell это можно сделать командой:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Или в обычном `cmd.exe`:
+
+```cmd
+copy .env.example .env
+```
+
+После этого открой `.env` и укажи свои значения:
 
 ```env
 APP_NAME=RTK IT School CRM API
