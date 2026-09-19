@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.core.auth import require_roles
 from app.models.models import metadata
 from app.schemas.sync import DatabaseSyncRequest, DatabaseSyncResponse
 
@@ -45,10 +46,31 @@ def _dependency_order(tables: dict[str, Any]) -> list[str]:
     return result
 
 
+def _coerce(value, column):
+    if value is None:
+        return None
+    try:
+        py = column.type.python_type
+    except Exception:
+        return value
+    try:
+        from datetime import date, datetime, time
+        from uuid import UUID
+        from decimal import Decimal
+        if py is date and isinstance(value, str): return date.fromisoformat(value)
+        if py is datetime and isinstance(value, str): return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if py is time and isinstance(value, str): return time.fromisoformat(value)
+        if py is UUID and not isinstance(value, UUID): return UUID(str(value))
+        if py is Decimal and not isinstance(value, Decimal): return Decimal(str(value))
+        if py is int and not isinstance(value, int): return int(value)
+        if py is bool and not isinstance(value, bool): return str(value).lower() in {"1","true","yes","on"}
+    except (ValueError, TypeError):
+        raise HTTPException(422, f"Invalid value for column {column.name}")
+    return value
+
 def _clean_row(table, row: dict[str, Any]) -> dict[str, Any]:
     known = {c.name for c in table.columns}
-    result = {k: v for k, v in row.items() if k in known}
-    # PostgreSQL generated columns cannot be written to.
+    result = {k: _coerce(v, table.c[k]) for k, v in row.items() if k in known}
     result = {k: v for k, v in result.items() if not getattr(table.c[k], "computed", None)}
     return result
 
@@ -69,7 +91,7 @@ def _normalize_deleted(table, value: Any):
     return {c.name: value.get(c.name) for c in cols}
 
 
-@router.post("/database", response_model=DatabaseSyncResponse)
+@router.post("/database", response_model=DatabaseSyncResponse, dependencies=[Depends(require_roles("admin","manager"))])
 async def sync_database(payload: DatabaseSyncRequest, db: AsyncSession = Depends(get_db)):
     """Synchronize a complete frontend snapshot in one transaction.
 
@@ -172,7 +194,7 @@ async def sync_database(payload: DatabaseSyncRequest, db: AsyncSession = Depends
     )
 
 
-@router.get("/database/tables")
+@router.get("/database/tables", dependencies=[Depends(require_roles("admin","manager"))])
 async def sync_tables():
     """Return tables accepted by the bulk synchronization endpoint."""
     return {"tables": sorted(_tables_with_pk().keys())}
