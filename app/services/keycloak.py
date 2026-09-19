@@ -8,19 +8,10 @@ from fastapi import HTTPException, status
 from app.core.config import settings
 
 
-class KeycloakService:
     def __init__(self) -> None:
-        self.base = settings.keycloak_url.rstrip("/")
-        self.realm = settings.keycloak_realm
-        self.client_id = settings.keycloak_client_id
-        self.client_secret = settings.keycloak_client_secret
         self.admin_client_id = (
-            settings.keycloak_admin_client_id
-            or (settings.keycloak_client_id if settings.keycloak_admin_use_main_client else None)
         )
         self.admin_client_secret = (
-            settings.keycloak_admin_client_secret
-            or (settings.keycloak_client_secret if settings.keycloak_admin_use_main_client else None)
         )
 
     @property
@@ -46,11 +37,9 @@ class KeycloakService:
         except httpx.RequestError as exc:
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
-                "Keycloak is unavailable",
             ) from exc
 
     @staticmethod
-    def _keycloak_error(response: httpx.Response, fallback: str) -> str:
         try:
             body = response.json()
         except Exception:
@@ -67,14 +56,12 @@ class KeycloakService:
     async def _post_token(self, data: dict[str, str], *, auth_error_message: str) -> dict[str, Any]:
         response = await self._request("POST", self.token_url, data=data)
         if response.status_code >= 400:
-            detail = self._keycloak_error(response, auth_error_message)
             if response.status_code in (400, 401):
                 raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail)
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail)
         try:
             return response.json()
         except ValueError as exc:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Keycloak returned an invalid token response") from exc
 
     async def login(self, username: str, password: str) -> dict[str, Any]:
         data = {
@@ -107,13 +94,11 @@ class KeycloakService:
             return
         if response.status_code in (400, 401):
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired refresh token")
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Keycloak logout failed")
 
     async def _admin_token(self) -> str:
         if not self.admin_client_id or not self.admin_client_secret:
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
-                "Keycloak admin service credentials are not configured. Set KEYCLOAK_ADMIN_CLIENT_ID/KEYCLOAK_ADMIN_CLIENT_SECRET or enable the main confidential client Service Account and set KEYCLOAK_CLIENT_SECRET.",
             )
 
         data = {
@@ -125,16 +110,12 @@ class KeycloakService:
         if response.status_code in (400, 401):
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
-                "Keycloak admin client authentication failed. Check the admin client credentials and Service Account configuration.",
             )
         if response.status_code >= 400:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Keycloak admin authentication failed")
         try:
             token = response.json().get("access_token")
         except ValueError as exc:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Keycloak returned an invalid admin token response") from exc
         if not token:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Keycloak admin token is missing")
         return str(token)
 
     async def register(
@@ -174,25 +155,21 @@ class KeycloakService:
                 "Username or email is already registered",
             )
         if response.status_code not in (201, 204):
-            detail = self._keycloak_error(response, "Registration failed")
             if response.status_code in (400, 422):
                 raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail)
             if response.status_code in (401, 403):
                 raise HTTPException(
                     status.HTTP_502_BAD_GATEWAY,
-                    "Keycloak admin client is not allowed to create users. Grant the Service Account the realm-management manage-users permission.",
                 )
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail)
 
         location = response.headers.get("Location", "")
         user_id = location.rstrip("/").split("/")[-1] if location else ""
         if not user_id:
-            # Keycloak normally returns Location on 201. If a proxy stripped it,
             # locate the newly created user by username instead of returning a
             # partially successful registration.
             user_id = await self.find_user_id(username, token)
         if not user_id:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Keycloak created the user but did not return its identifier")
         return user_id
 
     async def find_user_id(self, username: str, token: str | None = None) -> str | None:
@@ -221,7 +198,6 @@ class KeycloakService:
             headers={"Authorization": f"Bearer {token}"},
         )
         if response.status_code not in (204, 404):
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Unable to roll back the Keycloak user")
 
     async def assign_default_role(self, user_id: str, role_name: str) -> None:
         if not role_name:
@@ -236,10 +212,8 @@ class KeycloakService:
         if role_response.status_code == 404:
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
-                f"Keycloak realm role '{role_name}' does not exist",
             )
         if role_response.status_code != 200:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Unable to read the default Keycloak role")
         role = role_response.json()
         response = await self._request(
             "POST",
@@ -251,9 +225,6 @@ class KeycloakService:
             if response.status_code in (401, 403):
                 raise HTTPException(
                     status.HTTP_502_BAD_GATEWAY,
-                    "Keycloak admin client is not allowed to assign realm roles.",
                 )
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Unable to assign the default Keycloak role")
 
 
-keycloak = KeycloakService()

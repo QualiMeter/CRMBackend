@@ -10,7 +10,6 @@ class SchemaBase(BaseModel):
 
 class UsersCreateRequest(SchemaBase):
     id: int | None = None
-    keycloak_subject: UUID | None = None
     email: str | None = None
     full_name: str | None = None
     position: str | None = None
@@ -22,7 +21,6 @@ class UsersCreateRequest(SchemaBase):
 
 class UsersUpdateRequest(SchemaBase):
     id: int | None = None
-    keycloak_subject: UUID | None = None
     email: str | None = None
     full_name: str | None = None
     position: str | None = None
@@ -34,7 +32,6 @@ class UsersUpdateRequest(SchemaBase):
 
 class UsersResponse(SchemaBase):
     id: int | None = None
-    keycloak_subject: UUID | None = None
     email: str | None = None
     full_name: str | None = None
     position: str | None = None

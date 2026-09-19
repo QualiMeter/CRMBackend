@@ -11,7 +11,6 @@ class UserCreateRequest(BaseRequest):
     position: str | None = None
     phone: str | None = None
     status: str = "invited"
-    keycloak_subject: UUID | None = None
     role_codes: list[str] = Field(default_factory=list)
 
 class UserUpdateRequest(BaseRequest):

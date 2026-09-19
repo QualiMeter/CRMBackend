@@ -78,7 +78,6 @@ class AuthUserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    keycloak_subject: str | None = None
     username: str
     email: EmailStr
     full_name: str

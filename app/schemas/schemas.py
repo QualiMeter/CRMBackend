@@ -18,7 +18,6 @@ class MessageResponse(APIModel):
 
 class UserResponse(APIModel):
     id: int
-    keycloak_subject: UUID | None = None
     email: str
     full_name: str
     position: str | None = None

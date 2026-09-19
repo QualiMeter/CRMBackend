@@ -7,21 +7,7 @@ class Settings(BaseSettings):
     database_url: str
     cors_origins: str = "*"
 
-    # Keycloak / JWT
-    keycloak_url: str = "http://localhost:8080"
-    keycloak_realm: str = "rtk"
-    keycloak_client_id: str = "rtk-crm"
-    keycloak_audience: str | None = None
-    keycloak_client_secret: str | None = None
-    keycloak_admin_client_id: str | None = None
-    keycloak_admin_client_secret: str | None = None
-    # If true, registration may use KEYCLOAK_CLIENT_ID/SECRET as the admin
     # service-account client. A separate admin client is preferred in production.
-    keycloak_admin_use_main_client: bool = True
-    keycloak_default_role: str = "user"
-    keycloak_verify_audience: bool = False
-    keycloak_role_claim: str = "realm_access"
-    keycloak_roles_claim: str = "roles"
     auth_required: bool = True
     auth_auto_provision: bool = True
 

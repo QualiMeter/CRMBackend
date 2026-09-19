@@ -32,7 +32,6 @@ app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description=(
-        "RTK IT School CRM API. Authentication is handled by Keycloak; "
         "the API validates JWTs, provisions CRM users, exposes named CRUD "
         "resources, multipart uploads, imports and reports."
     ),
