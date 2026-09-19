@@ -156,3 +156,27 @@ Every response also includes `X-Request-ID`.
 - `admin`: user/role/security/integration/audit administration
 
 The backend validates the JWT signature using Keycloak's JWKS endpoint and verifies the token issuer. Audience verification is configurable.
+
+## Authentication
+
+Authentication is delegated to Keycloak. FastAPI never stores user passwords.
+
+Endpoints:
+
+- `POST /api/v1/auth/register` — creates a Keycloak user, assigns the configured default role, then signs the user in.
+- `POST /api/v1/auth/login` — username/password login through Keycloak.
+- `POST /api/v1/auth/refresh` — rotates/refreshes the access token using a refresh token.
+- `POST /api/v1/auth/logout` — invalidates the Keycloak session using the refresh token.
+- `GET /api/v1/auth/me` — returns the current CRM user, Keycloak subject, roles and JWT claims.
+- `GET /api/v1/me` — compatibility alias for `/auth/me`.
+- `GET /api/v1/me/roles` — compatibility role endpoint.
+
+### Keycloak setup
+
+Create a realm and a client matching `KEYCLOAK_REALM` and `KEYCLOAK_CLIENT_ID`.
+For login/register through this API, the client must allow Direct Access Grants (password flow).
+For registration, create a separate confidential client with Service Accounts enabled, put its credentials into `KEYCLOAK_ADMIN_CLIENT_ID` and `KEYCLOAK_ADMIN_CLIENT_SECRET`, and grant its service account the minimum realm-management permission needed to create users (`manage-users`).
+
+Create realm roles such as `user`, `manager`, and `admin`. The role in `KEYCLOAK_DEFAULT_ROLE` is assigned to newly registered users. JWT roles are read from `realm_access.roles` by default and are synchronized to the CRM `user_roles` table.
+
+For production, use HTTPS for Keycloak and the frontend, keep the admin client secret only in environment variables, and use a confidential client where appropriate.

@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     keycloak_realm: str = "rtk"
     keycloak_client_id: str = "rtk-crm"
     keycloak_audience: str | None = None
+    keycloak_client_secret: str | None = None
+    keycloak_admin_client_id: str | None = None
+    keycloak_admin_client_secret: str | None = None
+    keycloak_default_role: str = "user"
     keycloak_verify_audience: bool = False
     keycloak_role_claim: str = "realm_access"
     keycloak_roles_claim: str = "roles"
