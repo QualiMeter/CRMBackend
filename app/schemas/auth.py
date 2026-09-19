@@ -65,3 +65,29 @@ class AuthResponse(TokenResponse):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class InvitationInfoResponse(BaseModel):
+    valid: bool
+    email: EmailStr | None = None
+    full_name: str | None = None
+    expires_at: str | None = None
+
+
+class AcceptInvitationRequest(AuthBase):
+    token: str = Field(min_length=20, max_length=4096)
+    username: str = Field(min_length=3, max_length=100, pattern=r"^[a-zA-Z0-9._-]+$")
+    password: str = Field(min_length=8, max_length=4096)
+
+    @field_validator("password")
+    @classmethod
+    def accept_password(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Password must contain non-whitespace characters")
+        return value
+
+
+class InvitationResponse(BaseModel):
+    message: str
+    invite_url: str
+    expires_at: str

@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     refresh_token_days: int = 30
     default_role: str = "user"
     auth_required: bool = True
+    invitation_expire_hours: int = 48
+    frontend_base_url: str = "http://localhost:3000"
 
     storage_path: str = "./storage"
     max_upload_size: int = 50 * 1024 * 1024

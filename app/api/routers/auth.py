@@ -22,6 +22,8 @@ from app.db.session import get_db
 from app.models.models import metadata
 from app.schemas.auth import (
     AuthResponse,
+    AcceptInvitationRequest,
+    InvitationInfoResponse,
     AuthUserResponse,
     LoginRequest,
     LogoutRequest,
@@ -66,6 +68,76 @@ async def _issue_tokens(db: AsyncSession, user: dict, roles: set[str], username:
         refresh_expires_in=settings.refresh_token_days * 86400,
         user=_user_response(user, roles, username),
     )
+
+
+async def _get_invitation(db: AsyncSession, token: str):
+    invitations = metadata.tables["user_invitations"]
+    users = metadata.tables["users"]
+    token_hash = _hash_refresh_token(token)
+    query = select(
+        invitations.c.id.label("invitation_id"),
+        invitations.c.user_id.label("user_id"),
+        invitations.c.expires_at,
+        invitations.c.accepted_at,
+        invitations.c.revoked_at,
+        users.c.email,
+        users.c.full_name,
+        users.c.status,
+    ).join(users, users.c.id == invitations.c.user_id).where(
+        invitations.c.token_hash == token_hash
+    )
+    row = (await db.execute(query)).mappings().first()
+    if not row:
+        raise HTTPException(404, "Invitation not found or invalid")
+    now = datetime.now(timezone.utc)
+    if row["accepted_at"] is not None:
+        raise HTTPException(409, "Invitation has already been accepted")
+    if row["revoked_at"] is not None:
+        raise HTTPException(410, "Invitation has been revoked")
+    if row["expires_at"] <= now:
+        raise HTTPException(410, "Invitation has expired")
+    if str(row["status"]) != "invited":
+        raise HTTPException(409, "User is no longer in invited status")
+    return row
+
+
+@router.get("/auth/invitations/{token}", response_model=InvitationInfoResponse, summary="Validate an invitation")
+async def invitation_info(token: str, db: AsyncSession = Depends(get_db)):
+    row = await _get_invitation(db, token)
+    return InvitationInfoResponse(
+        valid=True,
+        email=str(row["email"]),
+        full_name=str(row["full_name"]),
+        expires_at=row["expires_at"].isoformat(),
+    )
+
+
+@router.post("/auth/invitations/accept", response_model=AuthResponse, summary="Accept an invitation and create credentials")
+async def accept_invitation(payload: AcceptInvitationRequest, db: AsyncSession = Depends(get_db)):
+    invitations = metadata.tables["user_invitations"]
+    credentials = metadata.tables["auth_credentials"]
+    row = await _get_invitation(db, payload.token)
+    existing = await db.execute(select(credentials.c.user_id).where(credentials.c.username == payload.username))
+    if existing.first():
+        raise HTTPException(409, "Username is already registered", headers={"X-Error-Code": "USERNAME_EXISTS"})
+    already = await db.execute(select(credentials.c.user_id).where(credentials.c.user_id == row["user_id"]))
+    if already.first():
+        raise HTTPException(409, "User already has login credentials")
+    now = datetime.now(timezone.utc)
+    try:
+        await db.execute(insert(credentials).values(
+            user_id=row["user_id"], username=payload.username, password_hash=hash_password(payload.password)
+        ))
+        await db.execute(update(metadata.tables["users"]).where(metadata.tables["users"].c.id == row["user_id"]).values(status="active"))
+        await db.execute(update(invitations).where(invitations.c.id == row["invitation_id"]).values(accepted_at=now))
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    user_result = await db.execute(select(metadata.tables["users"]).where(metadata.tables["users"].c.id == row["user_id"]))
+    user = dict(user_result.mappings().one())
+    roles = await get_roles(db, int(user["id"]))
+    return await _issue_tokens(db, user, roles, payload.username)
 
 
 @router.post("/auth/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED,

@@ -26,6 +26,21 @@ async def ensure_auth_tables(engine: AsyncEngine) -> None:
         CREATE INDEX IF NOT EXISTS ix_auth_sessions_user_id
         ON auth_sessions(user_id)
         """)
+        await conn.exec_driver_sql("""
+        CREATE TABLE IF NOT EXISTS user_invitations (
+            id uuid PRIMARY KEY,
+            user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            token_hash varchar(128) NOT NULL UNIQUE,
+            created_at timestamptz NOT NULL DEFAULT now(),
+            expires_at timestamptz NOT NULL,
+            accepted_at timestamptz,
+            revoked_at timestamptz
+        )
+        """)
+        await conn.exec_driver_sql("""
+        CREATE INDEX IF NOT EXISTS ix_user_invitations_user_id
+        ON user_invitations(user_id)
+        """)
 
         # The main schema contains the roles table, but role seed data may not
         # have been applied yet. Local registration must work on a fresh DB, so

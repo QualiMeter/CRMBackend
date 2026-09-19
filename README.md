@@ -14,13 +14,26 @@ The API uses:
 
 ### Auth endpoints
 
-- `POST /api/v1/auth/register`
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/refresh`
-- `POST /api/v1/auth/logout`
-- `GET /api/v1/auth/me`
-- `GET /api/v1/me`
-- `GET /api/v1/me/roles`
+- `POST /api/v1/auth/register` — самостоятельная регистрация нового пользователя.
+- `POST /api/v1/auth/login` — вход по username или email.
+- `POST /api/v1/auth/refresh` — ротация refresh token.
+- `POST /api/v1/auth/logout` — отзыв refresh token.
+- `GET /api/v1/auth/me` — текущий пользователь.
+- `GET /api/v1/me` — совместимый alias.
+- `GET /api/v1/me/roles` — роли текущего пользователя.
+- `GET /api/v1/auth/invitations/{token}` — публичная проверка приглашения.
+- `POST /api/v1/auth/invitations/accept` — принять приглашение, создать пароль и получить токены.
+
+### User invitations
+
+Администратор сначала создаёт пользователя со статусом `invited`, затем вызывает:
+
+- `POST /api/v1/users/{user_id}/invite` — создать одноразовую ссылку-приглашение.
+- `POST /api/v1/users/{user_id}/invite/revoke` — отозвать активное приглашение.
+
+Токен приглашения хранится в базе только в виде SHA-256 хеша. Ссылка действует `INVITATION_EXPIRE_HOURS` часов (по умолчанию 48). URL формируется относительно `FRONTEND_BASE_URL`. После принятия пользователь переводится из `invited` в `active`, для существующей записи пользователя создаются локальные credentials, а роли сохраняются.
+
+Обычный `/auth/register` не используется для приглашённых пользователей: он создаёт новую запись пользователя.
 
 ## Configuration
 
@@ -59,6 +72,7 @@ Errors use HTTP status codes `401`, `403`, `404`, `409`, `422`, and `500` with a
 
 ## Database
 
-The project does not contain SQL seed/schema files. At startup it reflects the existing CRM schema and creates only the two authentication support tables if they do not already exist:
+The project does not contain SQL seed/schema files. At startup it reflects the existing CRM schema and creates authentication support tables if they do not already exist:
 - `auth_credentials`
 - `auth_sessions`
+- `user_invitations`
