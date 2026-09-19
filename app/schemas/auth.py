@@ -22,7 +22,7 @@ class LoginRequest(AuthBase):
 class RegisterRequest(AuthBase):
     username: str = Field(min_length=3, max_length=100, pattern=r"^[a-zA-Z0-9._-]+$")
     email: EmailStr
-    password: str = Field(min_length=8, max_length=4096)
+    password: str = Field(max_length=4096)
     first_name: str = Field(min_length=1, max_length=100, validation_alias=AliasChoices("first_name", "firstName"))
     last_name: str = Field(min_length=1, max_length=100, validation_alias=AliasChoices("last_name", "lastName"))
 

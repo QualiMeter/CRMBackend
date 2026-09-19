@@ -26,3 +26,14 @@ async def ensure_auth_tables(engine: AsyncEngine) -> None:
         CREATE INDEX IF NOT EXISTS ix_auth_sessions_user_id
         ON auth_sessions(user_id)
         """)
+
+        # The main schema contains the roles table, but role seed data may not
+        # have been applied yet. Local registration must work on a fresh DB, so
+        # bootstrap the three built-in application roles idempotently.
+        await conn.exec_driver_sql("""
+        INSERT INTO roles (code, name, description) VALUES
+            ('user', 'User', 'Default authenticated application user'),
+            ('manager', 'Manager', 'CRM manager'),
+            ('admin', 'Administrator', 'CRM administrator')
+        ON CONFLICT (code) DO NOTHING
+        """)
