@@ -1,0 +1,62 @@
+{
+  "tables": {
+    "users": [
+      {"id": 1, "email": "admin@example.com", "full_name": "Администратор CRM", "position": "Администратор", "status": "active"},
+      {"id": 2, "email": "manager@example.com", "full_name": "Иван Петров", "position": "Менеджер", "status": "active"}
+    ],
+    "universities": [
+      {"id": 1, "name": "Московский технический университет", "short_name": "МТУ", "city": "Москва", "region": "Москва", "website_url": "https://example.edu", "external_code": "MSU-001", "status": "communication", "description": "Демо-вуз"},
+      {"id": 2, "name": "Санкт-Петербургский университет технологий", "short_name": "СПУТ", "city": "Санкт-Петербург", "region": "Санкт-Петербург", "external_code": "SPB-001", "status": "contact_search"}
+    ],
+    "user_university_access": [
+      {"user_id": 2, "university_id": 1, "is_manager": true, "granted_by": 1}
+    ],
+    "university_contacts": [
+      {"id": 1, "university_id": 1, "full_name": "Анна Смирнова", "position": "Руководитель образовательных программ", "email": "anna@example.edu", "phone": "+49 000 000000", "is_primary": true, "comment": "Основной контакт"}
+    ],
+    "it_directions": [
+      {"id": 1, "name": "Программирование", "code": "programming", "description": "Разработка ПО", "is_active": true},
+      {"id": 2, "name": "Аналитика данных", "code": "data", "description": "Data Science и аналитика", "is_active": true}
+    ],
+    "vendors": [
+      {"id": 1, "name": "RTK Software", "website_url": "https://example.com", "description": "Демо-поставщик", "is_active": true}
+    ],
+    "it_products": [
+      {"id": 1, "vendor_id": 1, "name": "RTK Learning Platform", "software_name": "RTK LMS", "description": "Демо ИТ-продукт", "is_active": true}
+    ],
+    "it_product_directions": [
+      {"product_id": 1, "direction_id": 1}
+    ],
+    "programs": [
+      {"id": 1, "university_id": 1, "direction_id": 1, "name": "Прикладное программирование", "description": "Базовая программа", "academic_year": "2026/2027", "applications_count": 120, "students_count": 80, "streams_count": 4, "starts_on": "2026-09-01"}
+    ],
+    "program_products": [
+      {"program_id": 1, "product_id": 1, "is_primary": true}
+    ],
+    "contracts": [
+      {"id": 1, "university_id": 1, "program_id": 1, "number": "RTK-2026-001", "signed_on": "2026-08-20", "valid_from": "2026-09-01", "valid_until": "2027-08-31", "status": "signed", "comment": "Демо-контракт"}
+    ],
+    "licenses": [
+      {"id": 1, "university_id": 1, "program_id": 1, "product_id": 1, "contract_id": 1, "signed_on": "2026-08-20", "valid_from": "2026-09-01", "valid_until": "2027-08-31", "seats_count": 100, "transfer_status": "transferred", "transferred_at": "2026-09-02T10:00:00+00:00"}
+    ],
+    "workflow_templates": [
+      {"id": 1, "name": "Основной процесс внедрения", "description": "Демо-шаблон", "is_default": true, "is_active": true, "version": 1, "created_by": 1}
+    ],
+    "workflow_template_stages": [
+      {"id": 1, "template_id": 1, "position": 1, "code": "contact_search", "name": "Поиск контактов ответственного в вузе", "is_optional": false, "default_duration_days": 5},
+      {"id": 2, "template_id": 1, "position": 2, "code": "communication", "name": "Коммуникация и уточнение актуальности программ", "is_optional": false, "default_duration_days": 7},
+      {"id": 3, "template_id": 1, "position": 3, "code": "meeting", "name": "Организация встречи с представителями вуза", "is_optional": false, "default_duration_days": 10}
+    ],
+    "interactions": [
+      {"id": 1, "university_id": 1, "program_id": 1, "product_id": 1, "template_id": 1, "name": "Внедрение RTK Learning Platform", "status": "active", "owner_user_id": 2, "starts_on": "2026-09-01", "planned_end_on": "2026-12-20", "comment": "Демо-проект"}
+    ],
+    "tasks": [
+      {"id": 1, "university_id": 1, "program_id": 1, "interaction_id": 1, "title": "Подтвердить дату встречи", "description": "Связаться с основным контактом", "assignee_id": 2, "created_by": 1, "due_at": "2026-09-25T12:00:00+00:00", "priority": "high", "status": "open"}
+    ],
+    "activities": [
+      {"id": 1, "kind": "interaction", "university_id": 1, "program_id": 1, "interaction_id": 1, "actor_id": 2, "title": "Создан проект внедрения", "description": "Демо-запись активности", "metadata": {"source": "demo"}}
+    ]
+  },
+  "deleted": {},
+  "replace": false
+}
