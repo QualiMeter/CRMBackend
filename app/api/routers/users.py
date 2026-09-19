@@ -10,6 +10,17 @@ from app.schemas.schemas import UserResponse, RoleResponse
 
 router = APIRouter(prefix="/users", tags=["users"])
 
+
+def _user_response(row: dict, roles: list[str] | None = None) -> dict:
+    # Never expose internal/legacy database columns through the public user DTO.
+    allowed = {
+        "id", "email", "full_name", "position", "phone", "status",
+        "last_login_at", "created_at", "updated_at",
+    }
+    result = {key: row[key] for key in allowed if key in row}
+    result["roles"] = roles or []
+    return result
+
 async def _roles(db, user_id):
     r=metadata.tables["roles"]; ur=metadata.tables["user_roles"]
     q=await db.execute(select(r.c.code).join(ur,ur.c.role_id==r.c.id).where(ur.c.user_id==user_id))
@@ -19,14 +30,14 @@ async def _roles(db, user_id):
 async def list_users(db: AsyncSession=Depends(get_db)):
     users=metadata.tables["users"]
     rows=(await db.execute(select(users).order_by(users.c.id))).mappings().all()
-    return [{**dict(x), "roles": await _roles(db,x["id"])} for x in rows]
+    return [_user_response(dict(x), await _roles(db, x["id"])) for x in rows]
 
 @router.get("/{user_id}", response_model=UserResponse, dependencies=[Depends(require_roles("admin", "manager"))])
 async def get_user(user_id:int, db:AsyncSession=Depends(get_db)):
     users=metadata.tables["users"]
     row=(await db.execute(select(users).where(users.c.id==user_id))).mappings().first()
     if not row: raise HTTPException(404,"User not found")
-    return {**dict(row),"roles":await _roles(db,user_id)}
+    return _user_response(dict(row), await _roles(db, user_id))
 
 @router.post("", response_model=UserResponse, status_code=201, dependencies=[Depends(require_roles("admin"))])
 async def create_user(payload:UserCreateRequest, db:AsyncSession=Depends(get_db)):
@@ -40,7 +51,7 @@ async def create_user(payload:UserCreateRequest, db:AsyncSession=Depends(get_db)
             if rid is None: raise HTTPException(422,f"Unknown role: {code}")
             await db.execute(insert(ur).values(user_id=uid,role_id=rid))
         await db.commit()
-        return {**dict(row),"roles":await _roles(db,uid)}
+        return _user_response(dict(row), await _roles(db, uid))
     except IntegrityError as exc:
         await db.rollback(); raise HTTPException(409,"User violates a unique or foreign-key constraint") from exc
 
