@@ -13,11 +13,12 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.routers import (
     auth, comments, crud, documents_extra, files, health, imports, reports,
-    sync, users,
+    sync, users, platform,
 )
 from app.core.config import settings
 from app.db.session import engine, ping_db
 from app.db.auth_tables import ensure_auth_tables
+from app.db.platform_tables import ensure_platform_tables
 from app.models.models import reflect_schema
 
 
@@ -26,6 +27,7 @@ async def lifespan(app: FastAPI):
     await ping_db()
     await reflect_schema(engine)
     await ensure_auth_tables(engine)
+    await ensure_platform_tables(engine)
     # Reflect the two authentication support tables so the auth layer can use them.
     await reflect_schema(engine)
     crud.register_all_tables()
@@ -144,6 +146,7 @@ app.include_router(imports.router, prefix=settings.api_prefix)
 app.include_router(reports.router, prefix=settings.api_prefix)
 app.include_router(documents_extra.router, prefix=settings.api_prefix)
 app.include_router(sync.router, prefix=settings.api_prefix)
+app.include_router(platform.router, prefix=settings.api_prefix)
 app.include_router(crud.router, prefix=settings.api_prefix)
 
 

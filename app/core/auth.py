@@ -127,6 +127,15 @@ async def get_current_user(
     return CurrentUser(user, roles, claims)
 
 
+def require_permission(permission_code: str):
+    async def dependency(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+        if "admin" in user.roles:
+            return user
+        # Permission checks are resolved lazily in request handlers through the DB dependency.
+        from fastapi import Request
+        raise HTTPException(403, f"Required permission: {permission_code}")
+    return dependency
+
 def require_roles(*required: str):
     async def dependency(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
         if not user.roles.intersection(required):

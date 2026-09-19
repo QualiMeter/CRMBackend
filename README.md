@@ -76,3 +76,43 @@ The project does not contain SQL seed/schema files. At startup it reflects the e
 - `auth_credentials`
 - `auth_sessions`
 - `user_invitations`
+
+## Platform features
+
+The backend includes local authentication and invitations, password change/reset, email verification, refresh-session management, RBAC foundations, audit logging, notifications and notification preferences, global search, webhooks with queued deliveries, background-job storage, soft-delete fields for users, metrics, health checks and a WebSocket endpoint.
+
+### Authentication flow
+
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/refresh`
+- `POST /api/v1/auth/logout`
+- `POST /api/v1/auth/change-password`
+- `POST /api/v1/auth/request-password-reset`
+- `POST /api/v1/auth/reset-password`
+- `POST /api/v1/auth/verify-email`
+- `POST /api/v1/auth/resend-verification`
+- `GET /api/v1/auth/sessions`
+- `DELETE /api/v1/auth/sessions/{id}`
+
+### Invitations
+
+An administrator creates a user with `invited` status and calls `POST /api/v1/users/{id}/invite`. The invitation is one-time, hashed in the database and expires according to `INVITATION_EXPIRE_HOURS`. The invited user validates it with `GET /api/v1/auth/invitations/{token}` and accepts it with `POST /api/v1/auth/invitations/accept`.
+
+### Notifications
+
+- `GET /api/v1/notifications`
+- `GET /api/v1/notifications/unread-count`
+- `POST /api/v1/notifications/{id}/read`
+- `POST /api/v1/notifications/read-all`
+- `GET/PUT /api/v1/notifications/preferences`
+
+### Operations
+
+- `GET /api/v1/search?q=...`
+- `GET /api/v1/audit-log`
+- `GET/POST/DELETE /api/v1/webhooks`
+- `GET /api/v1/metrics`
+- `WS /api/v1/ws`
+
+All platform support tables are created idempotently at startup; no SQL files are required in the backend archive.

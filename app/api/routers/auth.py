@@ -128,7 +128,7 @@ async def accept_invitation(payload: AcceptInvitationRequest, db: AsyncSession =
         await db.execute(insert(credentials).values(
             user_id=row["user_id"], username=payload.username, password_hash=hash_password(payload.password)
         ))
-        await db.execute(update(metadata.tables["users"]).where(metadata.tables["users"].c.id == row["user_id"]).values(status="active"))
+        await db.execute(update(metadata.tables["users"]).where(metadata.tables["users"].c.id == row["user_id"]).values(status="active", email_verified_at=now))
         await db.execute(update(invitations).where(invitations.c.id == row["invitation_id"]).values(accepted_at=now))
         await db.commit()
     except Exception:
@@ -172,8 +172,20 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
         await db.rollback()
         raise HTTPException(500, f"Default role '{settings.default_role}' is missing")
     await db.execute(insert(user_roles).values(user_id=user["id"], role_id=rid))
+    # Create email verification token for newly self-registered users.
+    import secrets, hashlib
+    vr = metadata.tables["auth_email_verifications"]
+    verification_token = secrets.token_urlsafe(48)
+    now = datetime.now(timezone.utc)
+    await db.execute(insert(vr).values(id=uuid.uuid4(), user_id=user["id"], token_hash=hashlib.sha256(verification_token.encode()).hexdigest(), expires_at=now + timedelta(hours=settings.email_verification_expire_hours)))
     await db.commit()
-    return await _issue_tokens(db, user, {settings.default_role}, payload.username)
+    from app.services.email import send_email
+    verification_url=f"{settings.frontend_base_url.rstrip('/')}/verify-email/{verification_token}"
+    sent=await send_email(str(payload.email), "Verify your RTK CRM email", f"Open this link to verify your email: {verification_url}")
+    response = await _issue_tokens(db, user, {settings.default_role}, payload.username)
+    if settings.debug_return_auth_tokens:
+        response.verification_url = verification_url
+    return response
 
 
 @router.post("/auth/login", response_model=AuthResponse, summary="Login with username or email")

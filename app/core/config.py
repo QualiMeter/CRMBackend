@@ -17,6 +17,15 @@ class Settings(BaseSettings):
     auth_required: bool = True
     invitation_expire_hours: int = 48
     frontend_base_url: str = "http://localhost:3000"
+    password_reset_expire_hours: int = 2
+    email_verification_expire_hours: int = 24
+    debug_return_auth_tokens: bool = False
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    smtp_starttls: bool = True
 
     storage_path: str = "./storage"
     max_upload_size: int = 50 * 1024 * 1024
