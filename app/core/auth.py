@@ -5,7 +5,7 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.db.session import get_db
@@ -53,7 +53,7 @@ async def _load_or_provision(db:AsyncSession,claims:dict[str,Any],jwt_roles:set[
         if not settings.auth_auto_provision: raise HTTPException(403,"User is not registered in CRM")
         valid_roles=[r for r in jwt_roles if r in {"user","manager","admin"}]
         default_role="user" if "user" not in valid_roles and not valid_roles else None
-        result=await db.execute(insert(users).values(keycloak_subject=subject,email=email,full_name=claims.get("name") or claims.get("preferred_username") or email,status="active",last_login_at=__import__('sqlalchemy').func.now()).returning(users))
+        result=await db.execute(insert(users).values(keycloak_subject=subject,email=email,full_name=claims.get("name") or claims.get("preferred_username") or email,status="active",last_login_at=func.now()).returning(users))
         row=result.mappings().one();
         role_names=valid_roles or [default_role]
         for code in role_names:
@@ -62,7 +62,7 @@ async def _load_or_provision(db:AsyncSession,claims:dict[str,Any],jwt_roles:set[
         await db.commit()
     elif str(row["status"])=="blocked": raise HTTPException(403,"User is blocked")
     else:
-        await db.execute(update(users).where(users.c.id==row["id"]).values(last_login_at=__import__('sqlalchemy').func.now()))
+        await db.execute(update(users).where(users.c.id==row["id"]).values(last_login_at=func.now()))
         # Sync known Keycloak roles into the CRM role table; unknown roles are ignored.
         known={"user","manager","admin"}; desired=jwt_roles & known
         if desired:

@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     keycloak_client_secret: str | None = None
     keycloak_admin_client_id: str | None = None
     keycloak_admin_client_secret: str | None = None
+    # If true, registration may use KEYCLOAK_CLIENT_ID/SECRET as the admin
+    # service-account client. A separate admin client is preferred in production.
+    keycloak_admin_use_main_client: bool = True
     keycloak_default_role: str = "user"
     keycloak_verify_audience: bool = False
     keycloak_role_claim: str = "realm_access"
