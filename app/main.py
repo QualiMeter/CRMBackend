@@ -11,9 +11,14 @@ from fastapi.responses import JSONResponse
 from scalar_fastapi import add_scalar_reference
 from sqlalchemy.exc import IntegrityError
 
+from app.core.logging import configure_logging, get_logger
+
+configure_logging()
+logger = get_logger("app")
+
 from app.api.routers import (
     auth, comments, crud, documents_extra, files, health, imports, reports,
-    sync, users, platform,
+    sync, users, platform, test_runner,
 )
 from app.core.config import settings
 from app.db.session import engine, ping_db
@@ -24,6 +29,7 @@ from app.models.models import reflect_schema
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Application startup")
     await ping_db()
     await reflect_schema(engine)
     await ensure_auth_tables(engine)
@@ -31,7 +37,9 @@ async def lifespan(app: FastAPI):
     # Reflect the two authentication support tables so the auth layer can use them.
     await reflect_schema(engine)
     crud.register_all_tables()
+    logger.info("Application startup complete")
     yield
+    logger.info("Application shutdown")
 
 
 app = FastAPI(
@@ -65,7 +73,15 @@ async def request_id_middleware(request: Request, call_next):
     except (ValueError, AttributeError):
         request_id = None
     request.state.request_id = request_id or str(uuid4())
-    response = await call_next(request)
+    logger.info("HTTP %s %s request_id=%s", request.method, request.url.path, request.state.request_id)
+    started = __import__("time").perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception("Unhandled request error request_id=%s", request.state.request_id)
+        raise
+    elapsed_ms = (__import__("time").perf_counter() - started) * 1000
+    logger.info("HTTP %s %s -> %s %.1fms request_id=%s", request.method, request.url.path, response.status_code, elapsed_ms, request.state.request_id)
     response.headers["X-Request-ID"] = request.state.request_id
     return response
 
@@ -147,6 +163,7 @@ app.include_router(reports.router, prefix=settings.api_prefix)
 app.include_router(documents_extra.router, prefix=settings.api_prefix)
 app.include_router(sync.router, prefix=settings.api_prefix)
 app.include_router(platform.router, prefix=settings.api_prefix)
+app.include_router(test_runner.router, prefix=settings.api_prefix)
 app.include_router(crud.router, prefix=settings.api_prefix)
 
 

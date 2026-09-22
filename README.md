@@ -116,3 +116,23 @@ An administrator creates a user with `invited` status and calls `POST /api/v1/us
 - `WS /api/v1/ws`
 
 All platform support tables are created idempotently at startup; no SQL files are required in the backend archive.
+
+
+## Тесты и Test UI
+
+Установите зависимости из `requirements.txt`, затем запускайте:
+
+```bash
+python -m pytest -q -rA
+```
+
+Каталоги тестов:
+- `tests/unit` — быстрые unit/contract тесты;
+- `tests/api` — API/integration-контракт тесты;
+- `tests/integration` — тесты, требующие PostgreSQL через `TEST_DATABASE_URL`.
+
+Для запуска тестов кнопками откройте `http://localhost:8000/api/v1/tests/ui`. В `.env` включите `TEST_UI_ENABLED=true`. UI запускает pytest отдельным процессом и показывает текущий stdout в реальном времени через опрос статуса. На публичном production-сервере этот флаг следует отключить.
+
+## Логирование
+
+Приложение пишет логи одновременно в stdout и `storage/logs/app.log`, с ротацией файлов. Настройки: `LOG_LEVEL` и `LOG_DIR`. Каждый HTTP-запрос получает `X-Request-ID`; в логах фиксируются метод, путь, статус и длительность.

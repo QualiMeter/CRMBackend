@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     smtp_from: str | None = None
     smtp_starttls: bool = True
+    log_level: str = "INFO"
+    log_dir: str = "./storage/logs"
+    test_ui_enabled: bool = False
 
     storage_path: str = "./storage"
     max_upload_size: int = 50 * 1024 * 1024
