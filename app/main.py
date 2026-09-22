@@ -18,7 +18,7 @@ logger = get_logger("app")
 
 from app.api.routers import (
     auth, comments, crud, documents_extra, files, health, imports, reports,
-    sync, users, platform, test_runner,
+    sync, users, platform, test_console,
 )
 from app.core.config import settings
 from app.db.session import engine, ping_db
@@ -163,7 +163,7 @@ app.include_router(reports.router, prefix=settings.api_prefix)
 app.include_router(documents_extra.router, prefix=settings.api_prefix)
 app.include_router(sync.router, prefix=settings.api_prefix)
 app.include_router(platform.router, prefix=settings.api_prefix)
-app.include_router(test_runner.router, prefix=settings.api_prefix)
+app.include_router(test_console.router, prefix=settings.api_prefix)
 app.include_router(crud.router, prefix=settings.api_prefix)
 
 

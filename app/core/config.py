@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_dir: str = "./storage/logs"
     test_ui_enabled: bool = False
+    test_ui_require_admin: bool = True
 
     storage_path: str = "./storage"
     max_upload_size: int = 50 * 1024 * 1024

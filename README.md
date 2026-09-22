@@ -136,3 +136,21 @@ python -m pytest -q -rA
 ## Логирование
 
 Приложение пишет логи одновременно в stdout и `storage/logs/app.log`, с ротацией файлов. Настройки: `LOG_LEVEL` и `LOG_DIR`. Каждый HTTP-запрос получает `X-Request-ID`; в логах фиксируются метод, путь, статус и длительность.
+
+## Production test console
+
+The project contains two complementary test layers:
+
+1. `pytest` tests for automated regression testing.
+2. Live diagnostic checks for a running production instance. These checks are read-only or contract checks and are intended to verify the live database/schema/storage/configuration without creating test data.
+
+Enable the console with:
+
+```env
+TEST_UI_ENABLED=true
+TEST_UI_REQUIRE_ADMIN=true
+```
+
+Open `/api/v1/tests/ui` and enter an administrator access token. The console provides a separate button for database, authentication, sessions, notifications, notification write contract, search, files, tasks, workflow, reports, imports, webhooks, email/SMTP and WebSocket checks, plus the full pytest suites.
+
+The production console is admin-protected. Do not expose it publicly without authentication.

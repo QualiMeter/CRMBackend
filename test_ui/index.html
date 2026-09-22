@@ -1,4 +1,28 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CRM Test Runner</title><style>body{font-family:system-ui;margin:0;background:#0d1117;color:#e6edf3}main{max-width:1100px;margin:auto;padding:24px}button{padding:10px 16px;margin:4px;border:0;border-radius:8px;cursor:pointer}pre{background:#010409;border:1px solid #30363d;border-radius:10px;padding:16px;min-height:420px;white-space:pre-wrap;overflow:auto}.ok{color:#3fb950}.bad{color:#f85149}.bar{display:flex;gap:8px;flex-wrap:wrap}</style></head><body><main><h1>RTK CRM — тесты</h1><div class="bar"><button onclick="run('all')">Все</button><button onclick="run('unit')">Unit</button><button onclick="run('api')">API</button><button onclick="run('integration')">Integration</button></div><p id="status">Готово</p><pre id="log"></pre></main><script>
-let timer; async function run(scope){clearInterval(timer);document.querySelector('#log').textContent='';document.querySelector('#status').textContent='Запуск...';const r=await fetch('/api/v1/tests/run?scope='+scope,{method:'POST'});const j=await r.json();poll(j.id)}
-async function poll(id){const f=async()=>{const r=await fetch('/api/v1/tests/runs/'+id);const j=await r.json();document.querySelector('#log').textContent=j.output||'';document.querySelector('#status').textContent=j.status+(j.exit_code===null?'':' | exit '+j.exit_code);if(j.status==='queued'||j.status==='running')timer=setTimeout(f,500);else document.querySelector('#status').className=j.status==='passed'?'ok':'bad'};f()}
-</script></body></html>
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RTK CRM — Production Test Console</title>
+<style>
+body{font-family:system-ui,-apple-system,sans-serif;margin:0;background:#0d1117;color:#e6edf3}main{max-width:1200px;margin:auto;padding:24px}.panel{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px;margin-bottom:16px}button{padding:10px 14px;margin:4px;border:0;border-radius:8px;cursor:pointer;background:#30363d;color:#fff}button:hover{background:#484f58}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}.test{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;border:1px solid #30363d;border-radius:8px}.status{font-weight:600}.passed{color:#3fb950}.failed{color:#f85149}.running{color:#d29922}.muted{color:#8b949e}input{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff}pre{background:#010409;border:1px solid #30363d;border-radius:10px;padding:16px;min-height:220px;white-space:pre-wrap;overflow:auto}
+</style>
+</head>
+<body><main>
+<h1>RTK CRM — Production Test Console</h1>
+<div class="panel"><b>Авторизация</b><p class="muted">Вставьте access token администратора. Токен используется только браузером для вызова диагностических endpoint'ов.</p><input id="token" type="password" placeholder="Bearer access token"><br><button onclick="saveToken()">Сохранить токен</button></div>
+<div class="panel"><h2>Проверки отдельных подсистем</h2><div id="checks" class="grid"></div></div>
+<div class="panel"><h2>Pytest</h2><button onclick="runPytest('all')">Все pytest</button><button onclick="runPytest('unit')">Unit</button><button onclick="runPytest('api')">API</button><button onclick="runPytest('integration')">Integration</button></div>
+<div class="panel"><div id="status" class="status">Готово</div><pre id="log">Выберите проверку.</pre></div>
+<script>
+const tokenKey='rtk_test_token'; let pollTimer;
+const tokenEl=document.querySelector('#token'); tokenEl.value=sessionStorage.getItem(tokenKey)||'';
+function saveToken(){sessionStorage.setItem(tokenKey,tokenEl.value);loadChecks()}
+function headers(){return {'Authorization':'Bearer '+tokenEl.value,'Content-Type':'application/json'}}
+async function api(url,opts={}){const r=await fetch(url,{...opts,headers:{...headers(),...(opts.headers||{})}});let j;try{j=await r.json()}catch{j={detail:await r.text()}};if(!r.ok)throw new Error((j.detail||'HTTP '+r.status));return j}
+function show(j){document.querySelector('#log').textContent=JSON.stringify(j,null,2);const s=document.querySelector('#status');s.textContent=(j.status||'done')+' — '+(j.message||'');s.className='status '+(j.status||'')}
+async function runCheck(id,btn){btn.disabled=true;document.querySelector('#status').textContent='Выполняется: '+id;try{show(await api('/api/v1/tests/checks/'+encodeURIComponent(id),{method:'POST'}))}catch(e){show({status:'failed',message:e.message})}finally{btn.disabled=false}}
+async function loadChecks(){const root=document.querySelector('#checks');root.innerHTML='';try{const list=await api('/api/v1/tests/checks');for(const x of list){const row=document.createElement('div');row.className='test';row.innerHTML='<span>'+x.name+'</span><button>Проверить</button>';const b=row.querySelector('button');b.onclick=()=>runCheck(x.id,b);root.appendChild(row)}}catch(e){root.innerHTML='<span class="failed">'+e.message+'</span>'}}
+async function runPytest(scope){clearInterval(pollTimer);try{const j=await api('/api/v1/tests/run?scope='+scope,{method:'POST'});poll(j.id)}catch(e){show({status:'failed',message:e.message})}}
+async function poll(id){const f=async()=>{try{const j=await api('/api/v1/tests/runs/'+id);document.querySelector('#log').textContent=j.output||'';document.querySelector('#status').textContent=j.status+(j.exit_code===null?'':' | exit '+j.exit_code);document.querySelector('#status').className='status '+j.status;if(j.status==='queued'||j.status==='running')pollTimer=setTimeout(f,500)}catch(e){show({status:'failed',message:e.message})}};f()}
+loadChecks();
+</script></main></body></html>
