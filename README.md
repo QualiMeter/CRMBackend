@@ -154,3 +154,23 @@ TEST_UI_REQUIRE_ADMIN=true
 Open `/api/v1/tests/ui` and enter an administrator access token. The console provides a separate button for database, authentication, sessions, notifications, notification write contract, search, files, tasks, workflow, reports, imports, webhooks, email/SMTP and WebSocket checks, plus the full pytest suites.
 
 The production console is admin-protected. Do not expose it publicly without authentication.
+
+## Students and teachers
+
+The CRM supports two education-specific account roles in addition to the existing `user`, `manager`, and `admin` roles:
+
+- `student` — student account;
+- `teacher` — teacher account.
+
+Startup creates the `student_profiles` and `teacher_profiles` tables idempotently and seeds these two roles. A profile is linked to the existing `users` account, so authentication remains unified.
+
+Education API:
+
+- `GET /api/v1/students` — list student profiles for admin/manager/teacher;
+- `GET /api/v1/students/me` — current student's profile;
+- `PUT /api/v1/students/me` — create/update current student's profile;
+- `GET /api/v1/teachers` — list teacher profiles for admin/manager/teacher;
+- `GET /api/v1/teachers/me` — current teacher's profile;
+- `PUT /api/v1/teachers/me` — create/update current teacher's profile.
+
+Student profile stores student number, university, educational program, course/year, group and enrollment/graduation years. Teacher profile stores employee number, university, department, academic title and specialization.
