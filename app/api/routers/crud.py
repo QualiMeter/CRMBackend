@@ -12,6 +12,13 @@ from app.schemas import crud as schemas
 
 router = APIRouter(tags=["crud"])
 
+
+def row_json(row):
+    """Convert a SQLAlchemy RowMapping into a JSON-safe dictionary."""
+    from fastapi.encoders import jsonable_encoder
+
+    return jsonable_encoder(dict(row))
+
 TABLE_PATHS = {
     "users":"users", "roles":"roles", "permissions":"permissions", "role_permissions":"role-permissions",
     "user_roles":"user-roles", "universities":"universities", "user_university_access":"user-university-access",
