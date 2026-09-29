@@ -18,13 +18,14 @@ logger = get_logger("app")
 
 from app.api.routers import (
     auth, comments, crud, documents_extra, files, health, imports, reports,
-    sync, users, platform, test_console, education,
+    sync, users, platform, test_console, education, tz, universities, dashboard,
 )
 from app.core.config import settings
 from app.db.session import engine, ping_db
 from app.db.auth_tables import ensure_auth_tables
 from app.db.platform_tables import ensure_platform_tables
 from app.db.education_tables import ensure_education_tables
+from app.db.tz_tables import ensure_tz_tables
 from app.models.models import reflect_schema
 
 
@@ -36,6 +37,7 @@ async def lifespan(app: FastAPI):
     await ensure_auth_tables(engine)
     await ensure_platform_tables(engine)
     await ensure_education_tables(engine)
+    await ensure_tz_tables(engine)
     # Reflect the two authentication support tables so the auth layer can use them.
     await reflect_schema(engine)
     crud.register_all_tables()
@@ -157,8 +159,11 @@ async def unhandled_handler(request: Request, exc: Exception):
 
 app.include_router(health.router)
 app.include_router(auth.router, prefix=settings.api_prefix)
+app.include_router(tz.router, prefix=settings.api_prefix)
 app.include_router(users.router, prefix=settings.api_prefix)
 app.include_router(education.router, prefix=settings.api_prefix)
+app.include_router(universities.router, prefix=settings.api_prefix)
+app.include_router(dashboard.router, prefix=settings.api_prefix)
 app.include_router(files.router, prefix=settings.api_prefix)
 app.include_router(comments.router, prefix=settings.api_prefix)
 app.include_router(imports.router, prefix=settings.api_prefix)

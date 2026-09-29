@@ -20,7 +20,7 @@ def _user_response(row: dict, roles: list[str] | None = None) -> dict:
     # Never expose internal/legacy database columns through the public user DTO.
     allowed = {
         "id", "email", "full_name", "position", "phone", "status",
-        "last_login_at", "created_at", "updated_at",
+        "last_login_at", "supervisor_id", "created_at", "updated_at",
     }
     result = {key: row[key] for key in allowed if key in row}
     result["roles"] = roles or []

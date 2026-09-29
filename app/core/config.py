@@ -8,7 +8,11 @@ class Settings(BaseSettings):
     database_url: str
     cors_origins: str = "*"
 
-    # Local API authentication. No external identity provider is required.
+    # Authentication provider abstraction. local is the current demo provider; keycloak is reserved for OIDC deployment.
+    auth_provider: str = "local"
+    keycloak_url: str = ""
+    keycloak_realm: str = ""
+    keycloak_client_id: str = ""
     jwt_secret: str = "change-this-development-secret-in-production"
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 30

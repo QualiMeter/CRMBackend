@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.db.session import get_db
 
 bearer = HTTPBearer(auto_error=False)
-KNOWN_ROLES = {"user", "manager", "admin", "student", "teacher"}
+KNOWN_ROLES = {"user", "manager", "leader", "admin", "student", "teacher"}
 
 
 @dataclass

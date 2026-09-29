@@ -174,3 +174,90 @@ Education API:
 - `PUT /api/v1/teachers/me` — create/update current teacher's profile.
 
 Student profile stores student number, university, educational program, course/year, group and enrollment/graduation years. Teacher profile stores employee number, university, department, academic title and specialization.
+
+## Обновление по ТЗ CRM ИТ Школы Ростелекома
+
+Реализованы изменения из обновленного backend-ТЗ:
+
+- роль `leader` и `users.supervisor_id`;
+- реестр `students` с необязательной связью с пользовательским аккаунтом;
+- массовый импорт студентов из `.csv`, `.xls`, `.xlsx` через `POST /api/v1/students/import`;
+- обязательный `direction_id` при `POST /api/v1/programs`;
+- дополнительные поля Interaction: vendor, contract, license и transfer status;
+- `workflow_instances`, сохранение версии шаблона и запрет смены шаблона уже запущенного workflow;
+- `workflow_transition_requests` с `approve/reject`;
+- возврат на предыдущий этап с причиной и `workflow_transition_history`;
+- `workflow_template_transitions` для ветвлений;
+- mock двусторонних интеграций LMS и сайта;
+- `integration_runs` и история интеграций;
+- ограничение видимости вузов/взаимодействий для менеджеров по `user_university_access`;
+- локальный JWT сохранён как основной demo provider.
+
+Существующие `student_profiles` и `teacher_profiles` сохранены: они предназначены для учебных кабинетов и не заменяют основной CRM-реестр студентов.
+
+## Updated CRM workflow contract
+
+The backend follows the current CRM frontend contract:
+
+- `manager`, `leader`, `admin` are the primary CRM roles; `student` and `teacher` remain auxiliary educational roles.
+- `users.supervisor_id` links a leader to their manager team. `user_university_access.is_manager` identifies the responsible KAM for a university.
+- Managers are restricted to their assigned universities. Leaders see their own/team universities and can reassign a university to a manager from their team. Admins have full access.
+- `Interaction` is the central CRM business object. Compatibility fields `owner_user_id`/`template_id` remain, while `responsible_user_id`/`workflow_template_id` are also exposed.
+- Workflow stages are snapshots. The legacy interaction-created workflow trigger is disabled by the application migration. A workflow is started explicitly with `POST /api/v1/interactions/{id}/workflow/start`; the template version and stages are copied into a `workflow_instance`.
+- Existing workflow stage instances are not rewritten when a template is edited. Direct CRUD modification/deletion of stage instances is blocked.
+- Stage status changes use `workflow_transition_requests` and are applied only after leader/admin approval.
+- Rollback and branch transitions are represented by approval requests and are applied atomically in the approval transaction.
+- `workflow_transition_history` records start, approve/reject, forward/branch and rollback actions.
+- Student registry records are independent from user accounts and supports CSV/XLS/XLSX import.
+- LMS and site endpoints are mock bidirectional integrations and create `integration_runs` records.
+- `AUTH_PROVIDER=local` is the current demo provider. A `KeycloakProvider` boundary is included for the future corporate OIDC deployment; no Keycloak dependency is required for the demo.
+
+### Main new/updated endpoints
+
+`/api/v1/users/team`
+
+`PUT /api/v1/universities/{id}/manager`
+
+`GET|POST|PATCH /api/v1/it-directions`
+
+`GET|POST|PATCH /api/v1/it-products`
+
+`GET|POST|PATCH|DELETE /api/v1/vendors`
+
+`POST|PATCH /api/v1/programs`
+
+`GET|POST|PATCH /api/v1/interactions`
+
+`POST /api/v1/interactions/{id}/workflow/start`
+
+`GET /api/v1/interactions/{id}/workflow`
+
+`POST /api/v1/workflow-transition-requests`
+
+`GET /api/v1/workflow-transition-requests?status=pending`
+
+`POST /api/v1/workflow-transition-requests/{id}/approve`
+
+`POST /api/v1/workflow-transition-requests/{id}/reject`
+
+`POST /api/v1/interactions/{id}/workflow/rollback`
+
+`POST /api/v1/interactions/{id}/workflow/transition`
+
+`GET /api/v1/interactions/{id}/workflow/history`
+
+`GET|POST /api/v1/workflow-templates/{id}/transitions`
+
+`PATCH|DELETE /api/v1/workflow-template-transitions/{id}`
+
+`GET|POST|PATCH|DELETE /api/v1/students`
+
+`POST /api/v1/students/import`
+
+`GET|POST /api/v1/integrations/lms/*`
+
+`GET|POST /api/v1/integrations/site/*`
+
+`GET /api/v1/integrations/history`
+
+`GET /api/v1/integrations/history/{id}`

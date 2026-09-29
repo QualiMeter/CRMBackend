@@ -10,6 +10,7 @@ class UserCreateRequest(BaseRequest):
     full_name: str
     position: str | None = None
     phone: str | None = None
+    supervisor_id: int | None = None
     status: str = "invited"
     role_codes: list[str] = Field(default_factory=list)
 
@@ -18,6 +19,7 @@ class UserUpdateRequest(BaseRequest):
     full_name: str | None = None
     position: str | None = None
     phone: str | None = None
+    supervisor_id: int | None = None
     status: str | None = None
     role_codes: list[str] | None = None
 

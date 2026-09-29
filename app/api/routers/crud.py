@@ -27,7 +27,7 @@ TABLE_PATHS = {
     "sync_jobs":"sync-jobs", "activities":"activities", "audit_log":"audit-log", "user_drafts":"user-drafts",
 }
 
-ADMIN_TABLES={"users","roles","permissions","role_permissions","user_roles","audit_log","integration_connections","sync_jobs"}
+ADMIN_TABLES={"users","roles","permissions","role_permissions","user_roles","audit_log","integration_connections","sync_jobs","universities","university_contacts","user_university_access","it_directions","vendors","it_products","it_product_directions","program_products","workflow_templates","workflow_template_stages","programs"}
 
 
 def _model(table: str, suffix: str):
@@ -65,6 +65,8 @@ def _dep(table):
     return Depends(require_roles("admin","manager","user"))
 
 def _write_dep(table):
+    if table == "workflow_stage_instances":
+        return Depends(require_roles("admin","leader"))
     if table in ADMIN_TABLES:
         return Depends(require_roles("admin"))
     return Depends(require_roles("admin","manager"))
@@ -86,6 +88,8 @@ def register_table(table_name: str):
     router.add_api_route(f"/{path}",list_items,methods=["GET"],response_model=list[response_model],dependencies=[read_dep],summary=f"List {table_name}")
 
     async def create_item(payload:create_model, db:AsyncSession=Depends(get_db)):
+        if table_name == "workflow_stage_instances":
+            raise HTTPException(403, "Workflow stage instances are created only when a workflow starts")
         values=_safe_values(table,payload.model_dump(exclude_unset=True))
         try:
             row=(await db.execute(insert(table).values(**values).returning(table))).mappings().one()
@@ -103,6 +107,8 @@ def register_table(table_name: str):
 
         async def update_item(pk_value:str,payload:update_model,db:AsyncSession=Depends(get_db)):
             values=_pk_values(table,(pk_value,)); data=_safe_values(table,payload.model_dump(exclude_unset=True))
+            if table_name == "workflow_stage_instances":
+                raise HTTPException(403, "Workflow stage instances are immutable snapshots; use workflow approval endpoints")
             if not data: return await _one(db,table,values)
             try:
                 await db.execute(update(table).where(*_pk_where(table,values)).values(**data)); await db.commit()
@@ -113,6 +119,8 @@ def register_table(table_name: str):
         router.add_api_route(f"/{path}/{{pk_value}}",update_item,methods=["PATCH"],response_model=response_model,dependencies=[write_dep],summary=f"Update {table_name}")
 
         async def delete_item(pk_value:str,db:AsyncSession=Depends(get_db)):
+            if table_name == "workflow_stage_instances":
+                raise HTTPException(403, "Workflow stage instances cannot be deleted")
             values=_pk_values(table,(pk_value,)); result=await db.execute(delete(table).where(*_pk_where(table,values)))
             if result.rowcount==0: raise HTTPException(404,"Resource not found")
             await db.commit()
